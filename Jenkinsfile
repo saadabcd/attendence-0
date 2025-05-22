@@ -7,7 +7,7 @@ pipeline {
                     java -version
                     echo "JAVA_HOME: $JAVA_HOME"
                     
-                    echo "ANDROID_HOME: $ANDROID_HOME"
+                    echo "rgerge ANDROID_HOME: $ANDROID_HOME"
                     ls -la $ANDROID_HOME
                     sdkmanager --list
                 '''
