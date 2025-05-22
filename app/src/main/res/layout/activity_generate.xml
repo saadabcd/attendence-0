@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:background="@color/white"
+    tools:context=".GenerateActivity">
+
+    <RelativeLayout
+        android:id="@+id/panel"
+        android:layout_width="match_parent"
+        android:layout_height="900dp"
+        android:layout_marginTop="-300dp"
+        android:background="@drawable/bg"
+
+        >
+    </RelativeLayout>
+
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="-600dp"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_row="0"
+            android:layout_column="0"
+            android:text="Generer \ncode QR"
+            android:textSize="40sp"
+            android:textStyle="bold"
+            android:textColor="@color/white">
+
+        </TextView>
+        <EditText
+            android:id="@+id/txtmatiere"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="150dp"
+            android:layout_row="2"
+            android:layout_column="0"
+            android:layout_columnSpan="2"
+            android:layout_gravity="fill"
+            android:text="Matiere"
+            android:textSize="30sp"
+            android:textStyle="bold"
+            android:textColor="@color/black">
+
+        </EditText>
+        <EditText
+            android:id="@+id/txtformateur"
+            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_row="3"
+            android:layout_column="0"
+            android:layout_columnSpan="2"
+            android:layout_gravity="fill"
+            android:hint="formateur"
+            android:text="Formateur"
+            android:textSize="30sp"
+            android:textStyle="bold"
+            android:textColor="@color/black">
+
+        </EditText>
+        <Button
+            android:id="@+id/btngenerate"
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:layout_margin="30dp"
+            android:layout_row="5"
+            android:layout_column="0"
+            android:layout_columnSpan="2"
+            android:layout_gravity="fill"
+            android:text="GENERATE"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:backgroundTint="@color/blue"
+            android:textColor="@color/white"
+            >
+
+        </Button>
+        <DatePicker
+            android:id="@+id/txtdate"
+            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:datePickerMode="spinner"
+            android:calendarViewShown="false"
+            android:layout_row="4"
+            android:layout_column="0"
+            android:layout_columnSpan="2"
+            android:layout_gravity="fill"
+            android:text="Matiere"
+            android:textSize="30sp"
+            android:textStyle="bold"
+            android:textColor="@color/black" >
+
+        </DatePicker>
+
+
+    </GridLayout>
+
+
+
+
+</LinearLayout>
