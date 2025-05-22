@@ -12,11 +12,11 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm  // Pulls code from GitHub
+                checkout scm
             }
         }
         
-        stage('Build APK') {
+        stage('Build') {
             steps {
                 sh './gradlew assembleDebug'
             }
@@ -26,15 +26,16 @@ pipeline {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'app-center-token', variable: 'API_TOKEN')]) {
-                        sh """
-                            curl -X POST "https://api.appcenter.ms/v0.1/apps/${APP_CENTER_ORG}/${APP_CENTER_APP_NAME}/release_uploads" \
-                            -H "accept: application/json" \
-                            -H "X-API-Token: ${API_TOKEN}" \
-                            -H "Content-Type: application/json" \
-                            -d '{}'
-                        """
-                        // Note: Actual upload would require more curl commands
-                        // or using App Center CLI (recommended for simplicity)
+                        // Using App Center CLI (recommended)
+                        sh '''
+                            npm install -g appcenter-cli
+                            appcenter login --token $API_TOKEN
+                            appcenter distribute release \
+                                --app $APP_CENTER_ORG/$APP_CENTER_APP_NAME \
+                                --file $APK_PATH \
+                                --group $APP_CENTER_DESTINATION \
+                                --release-notes "Jenkins automated build"
+                        '''
                     }
                 }
             }
@@ -43,12 +44,7 @@ pipeline {
     
     post {
         always {
-            archiveArtifacts artifacts: APK_PATH  // Saves APK as build artifact
-        }
-        failure {
-            mail to: 'team@example.com',
-                 subject: "Failed Pipeline: ${currentBuild.fullDisplayName}",
-                 body: "Check failed build at ${env.BUILD_URL}"
+            archiveArtifacts artifacts: APK_PATH
         }
     }
 }

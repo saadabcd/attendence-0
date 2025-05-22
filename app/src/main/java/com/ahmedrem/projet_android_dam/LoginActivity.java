@@ -16,6 +16,11 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.TextInputEditText;
 
+import com.microsoft.appcenter.AppCenter;
+import com.microsoft.appcenter.analytics.Analytics;
+import com.microsoft.appcenter.crashes.Crashes;
+import com.microsoft.appcenter.distribute.Distribute;
+
 public class LoginActivity extends AppCompatActivity {
 
     TextInputEditText username, password;
@@ -24,6 +29,14 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Initialize App Center FIRST (before setContentView)
+        AppCenter.start(getApplication(), "653074b5-0aa1-4ce4-84f0-683e9855258f",
+                      Analytics.class, Crashes.class, Distribute.class);
+        
+        // Enable in-app updates for testers (optional)
+        Distribute.setEnabledForDebuggableBuild(true);
+
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
