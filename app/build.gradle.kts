@@ -1,5 +1,6 @@
 plugins {
-    alias(libs.plugins.android.application)
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
@@ -29,10 +30,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
 }
 
 dependencies {
-
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)
@@ -42,9 +45,10 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
 
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
-    implementation ("com.google.zxing:core:3.3.0")
-    def appCenterSdkVersion = '5.0.4'
-    implementation "com.microsoft.appcenter:appcenter-analytics:${appCenterSdkVersion}"
-    implementation "com.microsoft.appcenter:appcenter-crashes:${appCenterSdkVersion}"
-    implementation "com.microsoft.appcenter:appcenter-distribute:${appCenterSdkVersion}"
+    implementation("com.google.zxing:core:3.3.0")
+    
+    val appCenterSdkVersion = "5.0.4"
+    implementation("com.microsoft.appcenter:appcenter-analytics:$appCenterSdkVersion")
+    implementation("com.microsoft.appcenter:appcenter-crashes:$appCenterSdkVersion") 
+    implementation("com.microsoft.appcenter:appcenter-distribute:$appCenterSdkVersion")
 }

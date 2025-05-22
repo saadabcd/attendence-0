@@ -15,7 +15,13 @@ pipeline {
                 checkout scm
             }
         }
-        
+        stage('Checkout & Prepare') {
+            steps {
+                checkout scm
+                sh 'chmod +x gradlew' 
+                sh './gradlew --version'  
+            }
+        }
         stage('Build') {
             steps {
                 sh './gradlew assembleDebug'
