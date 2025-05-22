@@ -21,7 +21,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh './gradlew assembleDebug --stacktrace --no-daemon'
+                        sh './gradlew assembleDebug --stacktrace '
                     } catch (e) {
                         echo "Build failed: ${e}"
                         sh './gradlew dependencies' // Debug dependency issues
