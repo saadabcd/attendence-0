@@ -3,6 +3,8 @@ pipeline {
     
     environment {
         APK_PATH = "app/build/outputs/apk/debug/app-debug.apk"
+        GRADLE_USER_HOME = "${env.WORKSPACE}/.gradle"
+        ANDROID_HOME = "/opt/android-sdk"
     }
     
     stages {
@@ -17,7 +19,15 @@ pipeline {
         
         stage('Build Debug APK') {
             steps {
-                sh './gradlew assembleDebug --stacktrace'
+                script {
+                    try {
+                        sh './gradlew assembleDebug --stacktrace --no-daemon'
+                    } catch (e) {
+                        echo "Build failed: ${e}"
+                        sh './gradlew dependencies' // Debug dependency issues
+                        error('Build failed')
+                    }
+                }
                 archiveArtifacts artifacts: APK_PATH, fingerprint: true
             }
         }
