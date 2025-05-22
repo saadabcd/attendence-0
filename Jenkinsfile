@@ -1,27 +1,23 @@
 pipeline {
     agent any
     
-    environment {
-        // App Center settings (replace with your values)
-        APP_CENTER_ORG = "app-gestion-abscence"
-        APP_CENTER_APP_NAME = "gestion_abs"
-        APP_CENTER_DESTINATION_GROUP = "Collaborators" // or your distribution group
-        APK_PATH = "app/build/outputs/apk/debug/app-debug.apk" // default debug APK path
-    }
-    
     stages {
-        stage('Checkout') {
+        stage('Clean & Prepare') {
             steps {
+                // Clean workspace before checkout
+                cleanWs()
+                
+                // Checkout code
                 checkout scm
+                
+                // Verify Gradle version
+                sh './gradlew --version'
+                
+                // Ensure gradlew is executable
+                sh 'chmod +x gradlew'
             }
         }
-        stage('Checkout & Prepare') {
-            steps {
-                checkout scm
-                sh 'chmod +x gradlew' 
-                sh './gradlew --version'  
-            }
-        }
+        
         stage('Build') {
             steps {
                 sh './gradlew assembleDebug'
@@ -29,10 +25,12 @@ pipeline {
         }
         
         stage('Upload to App Center') {
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+            }
             steps {
                 script {
                     withCredentials([string(credentialsId: 'app-center-token', variable: 'API_TOKEN')]) {
-                        // Using App Center CLI (recommended)
                         sh '''
                             npm install -g appcenter-cli
                             appcenter login --token $API_TOKEN
@@ -40,7 +38,7 @@ pipeline {
                                 --app $APP_CENTER_ORG/$APP_CENTER_APP_NAME \
                                 --file $APK_PATH \
                                 --group $APP_CENTER_DESTINATION \
-                                --release-notes "Jenkins automated build"
+                                --release-notes "Jenkins build ${BUILD_NUMBER}"
                         '''
                     }
                 }
@@ -50,7 +48,8 @@ pipeline {
     
     post {
         always {
-            archiveArtifacts artifacts: APK_PATH
+            archiveArtifacts artifacts: 'app/build/outputs/apk/debug/*.apk'
+            cleanWs()  // Optional: Clean workspace after build
         }
     }
 }
