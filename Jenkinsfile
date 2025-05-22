@@ -1,55 +1,32 @@
 pipeline {
     agent any
     
+    environment {
+        APK_PATH = "app/build/outputs/apk/debug/app-debug.apk"
+    }
+    
     stages {
-        stage('Clean & Prepare') {
+        stage('Clean & Setup') {
             steps {
-                // Clean workspace before checkout
                 cleanWs()
-                
-                // Checkout code
                 checkout scm
-                
-                // Verify Gradle version
-                sh './gradlew --version'
-                
-                // Ensure gradlew is executable
                 sh 'chmod +x gradlew'
+                sh './gradlew --version'
             }
         }
         
-        stage('Build') {
+        stage('Build Debug APK') {
             steps {
-                sh './gradlew assembleDebug'
-            }
-        }
-        
-        stage('Upload to App Center') {
-            when {
-                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
-            }
-            steps {
-                script {
-                    withCredentials([string(credentialsId: 'app-center-token', variable: 'API_TOKEN')]) {
-                        sh '''
-                            npm install -g appcenter-cli
-                            appcenter login --token $API_TOKEN
-                            appcenter distribute release \
-                                --app $APP_CENTER_ORG/$APP_CENTER_APP_NAME \
-                                --file $APK_PATH \
-                                --group $APP_CENTER_DESTINATION \
-                                --release-notes "Jenkins build ${BUILD_NUMBER}"
-                        '''
-                    }
-                }
+                sh './gradlew assembleDebug --stacktrace'
+                archiveArtifacts artifacts: APK_PATH, fingerprint: true
             }
         }
     }
     
     post {
         always {
-            archiveArtifacts artifacts: 'app/build/outputs/apk/debug/*.apk'
-            cleanWs()  // Optional: Clean workspace after build
+            junit '**/build/test-results/**/*.xml'
+            cleanWs()
         }
     }
 }
