@@ -11,7 +11,8 @@ sudo apt update && sudo apt upgrade -y
 
 # Install required packages
 echo "Installing required packages..."
-sudo apt install -y python3 python3-pip python3-venv nginx nmap git
+sudo apt install -y python3 python3-pip python3-venv nginx nmap git docker.io
+sudo systemctl enable --now docker
 
 # Create project directory
 echo "Setting up project directory..."
@@ -25,7 +26,13 @@ source venv/bin/activate
 
 # Install Python dependencies
 echo "Installing Python dependencies..."
-pip install fastapi uvicorn python-gvm python-nmap
+pip install fastapi "uvicorn[standard]" python-gvm python-nmap anyio typing_extensions
+
+# Optionally run OpenVAS container if not running
+if ! sudo docker ps --format '{{.Names}}' | grep -q '^openvas$'; then
+  echo "Starting OpenVAS container..."
+  sudo docker run -d -p 9390:9390 -p 9392:9392 --name openvas immauss/openvas:22.4.51 || true
+fi
 
 # Create systemd service for the backend
 echo "Creating systemd service for backend..."
@@ -35,11 +42,13 @@ Description=Vulnerability Scanner Backend
 After=network.target
 
 [Service]
-Type=simple
 User=$USER
 WorkingDirectory=/home/$USER/scan-app
-Environment=PATH=/home/$USER/scan-app/venv/bin
-ExecStart=/home/$USER/scan-app/venv/bin/uvicorn backend:app --host 0.0.0.0 --port 8000
+Environment=TOKEN_SECRET=change_me
+Environment=ADMIN_PASSWORD=admin123
+Environment=UNIV1_PASSWORD=univ1pass
+Environment=UNIV2_PASSWORD=univ2pass
+ExecStart=/home/$USER/scan-app/venv/bin/python3 /home/$USER/scan-app/backend.py
 Restart=always
 
 [Install]
@@ -61,7 +70,7 @@ server {
     # Serve static files (frontend)
     location / {
         root /home/$USER/scan-app;
-        index index.html;
+        index index.html login.html;
         try_files \$uri \$uri/ =404;
     }
 
@@ -88,15 +97,14 @@ sudo chown -R $USER:$USER /home/$USER/scan-app
 # Fix permissions for nginx to access the files
 echo "Setting proper permissions for nginx..."
 sudo chmod 755 /home/$USER/
-sudo chmod 755 /home/$USER/scan-app/
-sudo chown -R www-data:www-data /home/$USER/scan-app/
+sudo chmod -R a+rX /home/$USER/scan-app
 
 echo "Setup complete!"
 echo ""
 echo "Next steps:"
-echo "1. Copy your project files to /home/$USER/scan-app/"
-echo "2. Make sure OpenVAS Docker container is running"
-echo "3. Access the web app at: http://$(hostname -I | awk '{print $1}')"
+echo "1. Copy project files into /home/$USER/scan-app (index.html, login.html, admin.html, backend.py, style.css, script.js)"
+echo "2. If OpenVAS is not running, start it: sudo docker start openvas"
+echo "3. Access the web app at: http://$(hostname -I | awk '{print $1}')/login.html"
 echo "4. Check backend status: sudo systemctl status scan-backend"
 echo "5. Check nginx status: sudo systemctl status nginx"
 echo ""
