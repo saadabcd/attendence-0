@@ -1,0 +1,96 @@
+# ME-TO-DO CHECKLIST (Ubuntu, Full History)
+
+## 1. System Preparation
+- [x] Update system:
+  ```bash
+  sudo apt update && sudo apt upgrade
+  ```
+- [x] Install Python 3, pip, and venv:
+  ```bash
+  sudo apt install python3 python3-pip python3-venv
+  ```
+- [x] Install Docker (if not already):
+  ```bash
+  sudo apt install docker.io
+  sudo systemctl enable --now docker
+  sudo usermod -aG docker $USER  # (log out/in if needed)
+  ```
+
+## 2. OpenVAS (GVM) Setup
+- [x] Pull and run OpenVAS Docker container:
+  ```bash
+  docker pull immauss/openvas:22.4.51
+  docker run -d -p 9390:9390 -p 9392:9392 --name openvas immauss/openvas:22.4.51
+  ```
+- [x] Confirm OpenVAS is running and ports are mapped:
+  ```bash
+  sudo ss -tulnp | grep 9390
+  sudo ss -tulnp | grep 9392
+  # or
+  nc -vz localhost 9390
+  nc -vz localhost 9392
+  ```
+
+## 3. Project Setup
+- [x] Clone your GitHub repo:
+  ```bash
+  git clone <your-repo-url>
+  cd <project-folder>
+  ```
+- [x] (If needed) Install git:
+  ```bash
+  sudo apt install git
+  ```
+
+## 4. Frontend (HTML/CSS/JS)
+- [x] No install needed. Just open `index.html` in your browser to test.
+- [x] The scan list is now saved in your browser (localStorage). Refreshing the page will keep your scan history.
+
+## 5. Backend (FastAPI)
+- [x] Create and activate Python virtual environment:
+  ```bash
+  python3 -m venv venv
+  source venv/bin/activate
+  ```
+- [x] Install FastAPI, Uvicorn, and python-gvm:
+  ```bash
+  pip install fastapi uvicorn python-gvm
+  ```
+- [x] Install python-nmap for network scanning:
+  ```bash
+  pip install python-nmap
+  ```
+- [x] Use the provided `backend.py` from the repo (already set up for real OpenVAS scans).
+- [x] Run backend server:
+  ```bash
+  uvicorn backend:app --reload --host 0.0.0.0 --port 8000
+  ```
+- [x] Test backend in browser:
+  - Go to http://localhost:8000 (should see JSON message)
+  - Go to http://localhost:8000/docs to test /scan endpoint
+- [x] Note: The backend does not save scan state between restarts. If you restart the backend, the frontend will still show your scans, but the backend will not remember them.
+
+## 6. Test Connection to OpenVAS (GVM)
+- [x] Create `test_gvm_connection.py` (optional, for troubleshooting):
+  ```python
+  from gvm.connections import TLSConnection
+  from gvm.protocols.gmp import Gmp
+
+  connection = TLSConnection(hostname='localhost', port=9390)  # Use 9390 for GMP API
+  with Gmp(connection) as gmp:
+      gmp.authenticate('admin', 'yourpassword')  # Use your actual GVM credentials
+      version = gmp.get_version()
+      print(version)
+  ```
+- [x] Run the test script:
+  ```bash
+  python test_gvm_connection.py
+  ```
+- [ ] If you see the GVM version, connection is successful!
+
+---
+
+# Notes
+- Replace `<your-repo-url>` and credentials as needed.
+- Update this checklist as you progress.
+- Next: Use the real scan logic in `backend.py` to connect to OpenVAS for live scans. 

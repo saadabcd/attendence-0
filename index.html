@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vulnerability Scanner</title>
+  <!-- Link to the main stylesheet for UI styling -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Main title/header -->
+    <h1>Vulnerability Scanner</h1>
+    <!-- Scan form: User enters IP address or network to scan -->
+    <form id="scan-form">
+      <!-- Scan type selection dropdown -->
+      <select id="scan-type" required>
+        <option value="single">Single IP Address</option>
+        <option value="network">Network Range (CIDR)</option>
+      </select>
+      
+      <!-- Input field for target (IP or network) -->
+      <input type="text" id="target" placeholder="Enter IP address (e.g., 192.168.1.1)" required />
+      
+      <input type="email" id="email" placeholder="Enter your email (for PDF report)" required />
+      <button type="submit" id="start-btn">Start Scan</button>
+    </form>
+    <!-- List of active scans (populated by JS) -->
+    <ul id="scan-list" style="margin-top:2rem; padding:0; list-style:none; max-width:700px; width:100%;"></ul>
+    <!-- Loading indicator shown while scan is in progress -->
+    <div id="loading" class="loading" style="display:none;">Scanning in progress…</div>
+    <!-- Result area: Shows scan results or errors -->
+    <pre id="result" class="result"></pre>
+  </div>
+  <!-- Main frontend logic for scan management -->
+  <script src="script.js"></script>
+</body>
+</html> 

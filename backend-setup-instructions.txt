@@ -1,0 +1,58 @@
+# Backend Setup Instructions (FastAPI + Python)
+
+Follow these steps on your Ubuntu machine (in your project directory):
+
+---
+
+## 1. Set Up Python Virtual Environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+---
+
+## 2. Install FastAPI, Uvicorn, and python-gvm
+
+```bash
+pip install fastapi uvicorn python-gvm
+```
+
+---
+
+## 3. Use the Provided Backend
+
+- The file `backend.py` in this repository is already set up for real OpenVAS scans (no need to copy/paste code).
+- Make sure your OpenVAS Docker container is running and accessible (see `me-to-do.txt`).
+- You can adjust OpenVAS connection settings in `backend.py` if needed (host, port, username, password).
+
+---
+
+## 4. Run the Backend Server
+
+```bash
+uvicorn backend:app --reload --host 0.0.0.0 --port 8000
+```
+
+- The API will be available at: http://localhost:8000
+
+---
+
+## 5. Test the Backend
+
+- Open your browser and go to: http://localhost:8000
+  - You should see: {"message":"Backend is running!"}
+- For the `/scan` endpoint, go to: http://localhost:8000/docs
+  - You can test the API interactively here.
+
+---
+
+## 6. Next Steps
+- Connect the frontend to this backend (open `index.html` in your browser)
+- Use the web UI to start scans and view results
+- For troubleshooting or advanced setup, see `me-to-do.txt`
+
+---
+
+**Note:** The backend is stateless. If you restart the backend server, it will not remember previous scans. The frontend will still show your scans and try to update their status, but may show errors if the backend cannot find them. 
