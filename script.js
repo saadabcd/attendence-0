@@ -22,6 +22,12 @@ let resultsModal; // Will hold our results modal reference
 // DOM INITIALIZATION
 // ======================
 document.addEventListener('DOMContentLoaded', () => {
+    // Redirect to login if no token
+    if (!localStorage.getItem('authToken')) {
+        const next = encodeURIComponent(location.pathname);
+        location.href = `/login.html?next=${next}`;
+        return;
+    }
     // Initialize the results modal
     resultsModal = createResultsModal();
     
@@ -101,7 +107,7 @@ document.getElementById('scan-form').addEventListener('submit', async function(e
         // Call backend to start scan
         const response = await fetch('/api/scan', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
             body: JSON.stringify({ 
                 target, 
                 email, 
@@ -196,7 +202,9 @@ function addScanToList({ target, taskId, status }, skipSave = false) {
  */
 async function pollScanStatus(taskId, target, li) {
     try {
-        const response = await fetch(`/api/scan-status/${taskId}`);
+        const response = await fetch(`/api/scan-status/${taskId}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+        });
         if (!response.ok) throw new Error('Status check failed');
         
         const statusData = await response.json();
@@ -233,7 +241,7 @@ async function pollScanStatus(taskId, target, li) {
  */
 async function stopScan(taskId, li) {
     try {
-        await fetch(`/api/stop-scan/${taskId}`, { method: 'POST' });
+        await fetch(`/api/stop-scan/${taskId}`, { method: 'POST', headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
         
         // Update UI
         clearInterval(scans[taskId].interval);
@@ -254,7 +262,7 @@ async function stopScan(taskId, li) {
  */
 async function downloadReport(taskId) {
     try {
-        const response = await fetch(`/api/download-report/${taskId}`);
+        const response = await fetch(`/api/download-report/${taskId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
         if (!response.ok) throw new Error('Report not available');
         
         const blob = await response.blob();
@@ -345,7 +353,7 @@ async function showResultsInModal(taskId, target) {
     
     try {
         // Fetch results
-        const response = await fetch(`/api/scan-results/${taskId}`);
+        const response = await fetch(`/api/scan-results/${taskId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
         const data = await response.json();
         
         // Handle no vulnerabilities case

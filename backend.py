@@ -1,6 +1,6 @@
 # --- Import required libraries for FastAPI, OpenVAS communication, and XML parsing ---
 from base64 import b64decode
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Response
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -15,6 +15,12 @@ import smtplib
 from email.message import EmailMessage
 import nmap
 import ipaddress
+import json
+import secrets
+import hmac
+import hashlib
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, Any
 
 # --- Initialize FastAPI app and configure CORS to allow frontend requests ---
 app = FastAPI()
@@ -33,6 +39,180 @@ class ScanRequest(BaseModel):
     target: str  # IP address or network range
     email: str = None  # Optional email address
     scan_type: str = "single"  # "single" or "network"
+
+# ===================== AUTH & USERS =====================
+
+USERS_DB_FILE = os.environ.get("USERS_DB_FILE", os.path.join(os.path.dirname(__file__), "users.json"))
+TOKEN_SECRET = os.environ.get("TOKEN_SECRET", "dev_secret_change_me")
+TOKEN_TTL_MIN = int(os.environ.get("TOKEN_TTL_MIN", "720"))  # 12h default
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    user: Dict[str, Any]
+
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+    is_admin: bool = False
+
+
+def _pbkdf2_hash_password(password: str, *, iterations: int = 100_000) -> str:
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${dk.hex()}"
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        algo, iterations_str, salt_hex, hash_hex = stored_hash.split("$")
+        if algo != "pbkdf2_sha256":
+            return False
+        iterations = int(iterations_str)
+        salt = bytes.fromhex(salt_hex)
+        expected = bytes.fromhex(hash_hex)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+        return hmac.compare_digest(dk, expected)
+    except Exception:
+        return False
+
+
+def _load_users() -> Dict[str, Any]:
+    if not os.path.exists(USERS_DB_FILE):
+        return {"users": []}
+    try:
+        with open(USERS_DB_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"users": []}
+
+
+def _save_users(data: Dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(USERS_DB_FILE), exist_ok=True)
+    with open(USERS_DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def _get_user(username: str) -> Optional[Dict[str, Any]]:
+    db = _load_users()
+    for user in db.get("users", []):
+        if user.get("username") == username:
+            return user
+    return None
+
+
+def _create_user(username: str, password: str, is_admin: bool = False) -> Dict[str, Any]:
+    db = _load_users()
+    if any(u.get("username") == username for u in db.get("users", [])):
+        raise HTTPException(status_code=400, detail="User already exists")
+    user = {
+        "username": username,
+        "password_hash": _pbkdf2_hash_password(password),
+        "is_admin": bool(is_admin),
+    }
+    db.setdefault("users", []).append(user)
+    _save_users(db)
+    return {"username": user["username"], "is_admin": user["is_admin"]}
+
+
+def _ensure_seed_users() -> None:
+    db = _load_users()
+    users = db.get("users", [])
+    usernames = {u.get("username") for u in users}
+
+    changed = False
+
+    # Ensure an admin exists to allow creating users via UI
+    if not any(u.get("is_admin") for u in users):
+        admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+        users.append({
+            "username": "admin",
+            "password_hash": _pbkdf2_hash_password(admin_password),
+            "is_admin": True,
+        })
+        changed = True
+
+    # Seed required users: univ1, univ2 (non-admin)
+    if "univ1" not in usernames:
+        users.append({
+            "username": "univ1",
+            "password_hash": _pbkdf2_hash_password(os.environ.get("UNIV1_PASSWORD", "univ1pass")),
+            "is_admin": False,
+        })
+        changed = True
+    if "univ2" not in usernames:
+        users.append({
+            "username": "univ2",
+            "password_hash": _pbkdf2_hash_password(os.environ.get("UNIV2_PASSWORD", "univ2pass")),
+            "is_admin": False,
+        })
+        changed = True
+
+    if changed:
+        db["users"] = users
+        _save_users(db)
+
+
+def _encode_token(payload: Dict[str, Any]) -> str:
+    header = json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode("utf-8")
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    def b64url(data: bytes) -> str:
+        import base64
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+    signing_input = f"{b64url(header)}.{b64url(body)}".encode("ascii")
+    signature = hmac.new(TOKEN_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    token = f"{signing_input.decode('ascii')}.{b64url(signature)}"
+    return token
+
+
+def _decode_token(token: str) -> Dict[str, Any]:
+    import base64
+    try:
+        header_b64, body_b64, sig_b64 = token.split(".")
+        def b64urldecode(data: str) -> bytes:
+            padding = "=" * (-len(data) % 4)
+            return base64.urlsafe_b64decode(data + padding)
+        signing_input = f"{header_b64}.{body_b64}".encode("ascii")
+        expected_sig = hmac.new(TOKEN_SECRET.encode("utf-8"), signing_input, hashlib.sha256).digest()
+        provided_sig = b64urldecode(sig_b64)
+        if not hmac.compare_digest(expected_sig, provided_sig):
+            raise HTTPException(status_code=401, detail="Invalid token signature")
+        payload = json.loads(b64urldecode(body_b64).decode("utf-8"))
+        # Expiration check
+        if "exp" in payload:
+            exp_ts = int(payload["exp"])
+            if datetime.now(timezone.utc).timestamp() > exp_ts:
+                raise HTTPException(status_code=401, detail="Token expired")
+        return payload
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def require_auth(request: Request) -> Dict[str, Any]:
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    token = auth_header.split(" ", 1)[1].strip()
+    payload = _decode_token(token)
+    username = payload.get("sub")
+    user = _get_user(username) if username else None
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return {"username": user["username"], "is_admin": user.get("is_admin", False)}
+
+
+def require_admin(current_user: Dict[str, Any] = Depends(require_auth)) -> Dict[str, Any]:
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return current_user
 
 # --- OpenVAS connection and scan configuration constants ---
 OPENVAS_HOST = '192.168.1.38'  # Ubuntu VM IP
@@ -239,10 +419,38 @@ def send_email_with_pdf(to_email, pdf_bytes, task_id):
 def read_root():
     return {"message": "Backend is running!"}
 
+
+@app.post("/auth/login", response_model=LoginResponse)
+def login(request: LoginRequest):
+    user = _get_user(request.username)
+    if not user or not _verify_password(request.password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    exp = int((datetime.now(timezone.utc) + timedelta(minutes=TOKEN_TTL_MIN)).timestamp())
+    token = _encode_token({
+        "sub": user["username"],
+        "is_admin": user.get("is_admin", False),
+        "exp": exp,
+    })
+    return {
+        "token": token,
+        "user": {"username": user["username"], "is_admin": user.get("is_admin", False)}
+    }
+
+
+@app.get("/me")
+def me(current_user: Dict[str, Any] = Depends(require_auth)):
+    return current_user
+
+
+@app.post("/admin/users")
+def create_user_endpoint(payload: CreateUserRequest, admin_user: Dict[str, Any] = Depends(require_admin)):
+    created = _create_user(payload.username, payload.password, payload.is_admin)
+    return {"status": "success", "user": created}
+
 ###################################################################################################
 # --- Endpoint: Test connection to OpenVAS ---
 @app.get("/test-connection")
-def test_openvas_connection():
+def test_openvas_connection(current_user: Dict[str, Any] = Depends(require_auth)):
     """Test the connection to OpenVAS"""
     # Used by frontend to check if backend can reach OpenVAS
     try:
@@ -257,7 +465,7 @@ def test_openvas_connection():
 ###################################################################################################
 # --- Endpoint: Scan network with Nmap and return live hosts ---
 @app.get("/nmap-scan")
-async def nmap_scan(ip_range: str):
+async def nmap_scan(ip_range: str, current_user: Dict[str, Any] = Depends(require_auth)):
     """
     Scan a network range with Nmap and return live hosts as a simple list
     Returns: IP addresses, one per line
@@ -326,7 +534,7 @@ async def nmap_scan(ip_range: str):
 # Store mapping of task_id to email (in-memory for now)
 task_email_map = {}
 @app.post("/scan")
-async def scan(request: ScanRequest, background_tasks: BackgroundTasks):
+async def scan(request: ScanRequest, background_tasks: BackgroundTasks, current_user: Dict[str, Any] = Depends(require_auth)):
     # Main endpoint called by frontend to start a scan for a given IP or network
     # Handles target creation, task creation, and scan start
     print(f"[DEBUG] /scan called with target: {request.target}, scan_type: {request.scan_type}")
@@ -521,7 +729,7 @@ async def scan(request: ScanRequest, background_tasks: BackgroundTasks):
 ###################################################################################################
 # --- Endpoint: Stop a running scan by task_id ---
 @app.post("/stop-scan/{task_id}")
-def stop_scan(task_id: str, request: Request):
+def stop_scan(task_id: str, request: Request, current_user: Dict[str, Any] = Depends(require_auth)):
     """Stop a running scan/task by task_id."""
     # Used by frontend to stop a scan in progress
     try:
@@ -543,7 +751,7 @@ def stop_scan(task_id: str, request: Request):
 ###################################################################################################
 # --- Endpoint: Get the status of a running scan ---
 @app.get("/scan-status/{task_id}")
-def get_scan_status(task_id: str, background_tasks: BackgroundTasks = None):
+def get_scan_status(task_id: str, background_tasks: BackgroundTasks = None, current_user: Dict[str, Any] = Depends(require_auth)):
     """Get the status of a running scan (returns: Running, Stopped, Done, or Error)"""
     # Example OpenVAS XML response:
     # <task id="...">
@@ -642,7 +850,7 @@ def get_scan_status(task_id: str, background_tasks: BackgroundTasks = None):
 ###################################################################################################
 # --- Endpoint: Get the results of a completed scan ---
 @app.get("/scan-results/{task_id}")
-def get_scan_results(task_id: str):
+def get_scan_results(task_id: str, current_user: Dict[str, Any] = Depends(require_auth)):
     """
     Get complete scan results with robust error handling
     """
@@ -774,7 +982,7 @@ def getattr(element, attr, default=None):
 ###################################################################################################
 # --- Endpoint: Download PDF report for a scan ---
 @app.get("/download-report/{task_id}")
-async def download_report(task_id: str):
+async def download_report(task_id: str, current_user: Dict[str, Any] = Depends(require_auth)):
     """Download PDF report for a task (incorporating gvm-tools best practices)"""
     try:
         connection = get_gmp_connection()
@@ -836,7 +1044,7 @@ async def download_report(task_id: str):
 
 ###################################################################################################
 @app.get("/report-formats")
-def list_report_formats():
+def list_report_formats(current_user: Dict[str, Any] = Depends(require_auth)):
     """List all available report formats in OpenVAS"""
     try:
         connection = get_gmp_connection()
@@ -876,6 +1084,8 @@ logger = logging.getLogger(__name__)
 # --- Main entry point for running with Uvicorn (for development) ---
 if __name__ == "__main__":
     import uvicorn
+    # Seed users before starting
+    _ensure_seed_users()
     uvicorn.run(app, host="0.0.0.0", port=8000) 
     
     connection = get_gmp_connection()
