@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Create Users</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .admin-container { max-width: 600px; margin: 6vh auto; padding: 1.5rem; border: 1px solid #ddd; border-radius: 8px; }
+    .row { display: flex; gap: .5rem; margin-bottom: .75rem; }
+  </style>
+  <script>
+    function requireAuth() {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        const next = encodeURIComponent(location.pathname);
+        location.href = `/login.html?next=${next}`;
+        throw new Error('Not authenticated');
+      }
+      return token;
+    }
+
+    function requireAdmin() {
+      const user = JSON.parse(localStorage.getItem('authUser') || '{}');
+      if (!user.is_admin) {
+        alert('Admin only');
+        location.href = '/';
+        throw new Error('Not admin');
+      }
+    }
+
+    async function handleCreateUser(e) {
+      e.preventDefault();
+      const token = requireAuth();
+      const username = document.getElementById('new-username').value.trim();
+      const password = document.getElementById('new-password').value;
+      const isAdmin = document.getElementById('new-is-admin').checked;
+      const resultEl = document.getElementById('result');
+      resultEl.textContent = '';
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ username, password, is_admin: isAdmin })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Create failed');
+        resultEl.textContent = 'Created user ' + data.user.username + (data.user.is_admin ? ' (admin)' : '');
+        document.getElementById('create-form').reset();
+      } catch (err) {
+        resultEl.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      try { requireAuth(); requireAdmin(); } catch { return; }
+      document.getElementById('create-form').addEventListener('submit', handleCreateUser);
+    });
+  </script>
+</head>
+<body>
+  <div class="admin-container">
+    <h1>Admin: Create User</h1>
+    <form id="create-form">
+      <div class="row">
+        <input id="new-username" type="text" placeholder="Username" required>
+      </div>
+      <div class="row">
+        <input id="new-password" type="password" placeholder="Password" required>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="new-is-admin"> Is Admin</label>
+      </div>
+      <button type="submit">Create</button>
+    </form>
+    <pre id="result"></pre>
+  </div>
+</body>
+</html>
+

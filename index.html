@@ -9,8 +9,13 @@
 </head>
 <body>
   <div class="container">
-    <!-- Main title/header -->
-    <h1>Vulnerability Scanner</h1>
+    <div style="display:flex; justify-content: space-between; align-items: center;">
+      <h1>Vulnerability Scanner</h1>
+      <div>
+        <button id="admin-btn" style="margin-right:.5rem;">Admin</button>
+        <button id="logout-btn">Logout</button>
+      </div>
+    </div>
     <!-- Scan form: User enters IP address or network to scan -->
     <form id="scan-form">
       <!-- Scan type selection dropdown -->
@@ -34,5 +39,24 @@
   </div>
   <!-- Main frontend logic for scan management -->
   <script src="script.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const logoutBtn = document.getElementById('logout-btn');
+      const adminBtn = document.getElementById('admin-btn');
+      logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('authUser');
+        location.href = '/login.html';
+      });
+      adminBtn.addEventListener('click', () => {
+        const user = JSON.parse(localStorage.getItem('authUser') || '{}');
+        if (!user.is_admin) {
+          alert('Admin only');
+          return;
+        }
+        location.href = '/admin.html';
+      });
+    });
+  </script>
 </body>
 </html> 
